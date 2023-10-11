@@ -31,32 +31,32 @@ def remove_stopwords(tokens_list, stopwords):
     ]
 
 
-def weigh_term(frequency, frequency_in_collection, N):
+def weigh_term(frequency, K, b, N, avg_doclen):
     return (
-        1 + np.log2(frequency) * np.log2(N / frequency_in_collection)
+        ((K + 1) * frequency) / (K * ((1 - b) + b * (N / avg_doclen))) + frequency
         if frequency > 0
         else 0
     )
 
 
-def weigh_row(row, documents, term):
+def weigh_row(row, documents, term, K, b, N, avg_doclen):
     frequencies = np.array(
         list(map(lambda doc: np.count_nonzero(doc == term), documents))
     )
-    frequency_in_collection = np.count_nonzero(np.concatenate(documents) == term)
-    N = len(row.index)
-    weights = pd.Series(frequencies).apply(
-        weigh_term, args=(frequency_in_collection, N)
-    )
+    weights = pd.Series(frequencies).apply(weigh_term, args=(K, b, N, avg_doclen))
     return weights
 
 
-def generate_tfidf_matrix(documents, terms):
-    tfidf_matrix = pd.DataFrame(index=terms, columns=range(len(documents)))
-    for term, row in tfidf_matrix.iterrows():
-        tfidf_matrix.loc[term] = weigh_row(row, documents, term)
+def generate_bm_matrix(documents, terms, K, b):
+    bm_matrix = pd.DataFrame(index=terms, columns=range(len(documents)))
+    N = len(documents)
+    avg_doclen = np.mean(
+        list(map(lambda doc: sum(map(lambda w: len(w), doc)), documents))
+    )
+    for term, row in bm_matrix.iterrows():
+        bm_matrix.loc[term] = weigh_row(row, documents, term, K, b, N, avg_doclen)
 
-    return tfidf_matrix
+    return bm_matrix
 
 
 def similarity(document, query):
@@ -95,10 +95,13 @@ def main():
     terms = np.array(sorted(list(set([term for l in tokens_list for term in l]))))
     query = np.array([query.split()])
 
-    tfidf_matrix = generate_tfidf_matrix(tokens_list, terms)
-    query_weights = generate_tfidf_matrix(query, terms)
-    ranked_documents = rank(tfidf_matrix, query_weights)
-    print(ranked_documents)
+    K = 0.7
+    b = 0.8
+    tfidf_matrix = generate_bm_matrix(tokens_list, terms, K, b)
+    print(tfidf_matrix)
+    # query_weights = generate_bm_matrix(query, terms)
+    # ranked_documents = rank(tfidf_matrix, query_weights)
+    # print(ranked_documents)
 
 
 if __name__ == "__main__":
