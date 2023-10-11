@@ -31,57 +31,48 @@ def remove_stopwords(tokens_list, stopwords):
     ]
 
 
-def weigh_term(frequency, K, b, N, avg_doclen):
+def weigh_term(frequency, K, b, N, doclens, avg_doclen, ni):
     return (
-        ((K + 1) * frequency) / (K * ((1 - b) + b * (N / avg_doclen)) + frequency)
-        if frequency > 0
+        ((K + 1) * frequency.iloc[0])
+        / (
+            K * ((1 - b) + b * (doclens[frequency.name] / avg_doclen))
+            + frequency.iloc[0]
+        )
+        * np.log2((N - ni + 0.5) / (ni + 0.5))
+        if frequency.iloc[0] > 0
         else 0
     )
 
 
-def weigh_row(row, documents, term, K, b, N, avg_doclen):
+def weigh_row(row, documents, term, K, b, N, doclens, avg_doclen):
     frequencies = np.array(
         list(map(lambda doc: np.count_nonzero(doc == term), documents))
     )
-    weights = pd.Series(frequencies).apply(weigh_term, args=(K, b, N, avg_doclen))
+    N = len(documents)
+    ni = np.count_nonzero(list(map(lambda freq: freq > 0, frequencies)))
+    weights = pd.DataFrame(frequencies).apply(
+        weigh_term, args=(K, b, N, doclens, avg_doclen, ni), axis=1
+    )
     return weights
 
 
 def generate_bm_matrix(documents, terms, K, b):
     bm_matrix = pd.DataFrame(index=terms, columns=range(len(documents)))
     N = len(documents)
+    doclens = list(map(lambda doc: sum(map(lambda word: len(word), doc)), documents))
     avg_doclen = np.mean(
         list(map(lambda doc: sum(map(lambda w: len(w), doc)), documents))
     )
     for term, row in bm_matrix.iterrows():
-        bm_matrix.loc[term] = weigh_row(row, documents, term, K, b, N, avg_doclen)
+        bm_matrix.loc[term] = weigh_row(
+            row, documents, term, K, b, N, doclens, avg_doclen
+        )
 
     return bm_matrix
 
 
-def similarity(document, query):
-    # return document.dot(query) / (np.linalg.norm(document) * np.linalg.norm(query))
-    # return document
-    pass
-
-
-def rank(documents, query, terms):
-    pass
-    # print(documents)
-    # print(query, end="\n\n")
-    # ranks = pd.Series(documents.index) in query
-    # print(ranks)
-
-    # def generate_query_series(word, terms):
-    #     return 1 if word in terms else 0
-
-    # query = query.apply(generate_query_series, args=(terms,))
-    # print(query)
-    # similarity(documents[1], query)
-    # ranked_documents = (
-    #     documents.apply(similarity, args=(query,)).T[0].sort_values(ascending=False)
-    # )
-    # return np.array(ranked_documents.index)
+def rank(documents, query):
+    return documents.loc[query].sum().sort_values(ascending=False)
 
 
 def main():
@@ -99,22 +90,20 @@ def main():
     query = "xadrez peã caval torr"  # consulta
     separators = [" ", ",", ".", "!", "?"]  # separadores para tokenizacao
 
-    # normalize
+    # normalize / tokenize
     normalized = np.array([normalize(s) for s in dictionary])
-    # tokenize
     tokens_list = np.array([tokenize(s, separators) for s in normalized], dtype=object)
-    # rmv stopwords
     tokens_list = remove_stopwords(tokens_list, stopwords)
-    # terms
+
     terms = np.array(sorted(list(set([term for l in tokens_list for term in l]))))
     query = np.array(query.split())
 
-    K = 1
+    K = 1.2
     b = 0.75
     bm_matrix = generate_bm_matrix(tokens_list, terms, K, b)
 
-    # query
-    ranked_documents = rank(bm_matrix, query, terms)
+    document_ranks = rank(bm_matrix, query)
+    print(document_ranks)
 
 
 if __name__ == "__main__":
