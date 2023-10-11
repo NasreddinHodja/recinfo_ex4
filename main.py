@@ -38,7 +38,7 @@ def weigh_term(frequency, K, b, N, doclens, avg_doclen, ni):
             K * ((1 - b) + b * (doclens[frequency.name] / avg_doclen))
             + frequency.iloc[0]
         )
-        * np.log2((N - ni + 0.5) / (ni + 0.5))
+        * np.log((N - ni + 0.5) / (ni + 0.5) + 1)
         if frequency.iloc[0] > 0
         else 0
     )
@@ -84,6 +84,7 @@ def main():
             "O peã lac o boi",
             "Caval de rodei!",
             "Polic o jog no xadrez.",
+            "xadrez peã caval torr",
         ]
     )
     stopwords = ["a", "o", "e", "é", "de", "do", "no", "são"]  # lista de stopwords
